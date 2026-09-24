@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e2230">
+<title>Klizna slagalica</title>
+<style>
+  :root {
+    --gap: 6px;
+    --radius: 10px;
+    --cols: 4;
+    --rows: 4;
+    --chrome: 340px;
+    --hole: #161a26;
+    --board-bg: #1a1e2b;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body {
+    padding: 10px;
+    padding-top:    max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #1e2230;
+    color: #e8ecf5;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(1rem, 4.5vw, 1.5rem);
+    letter-spacing: .5px;
+    text-align: center;
+  }
+
+  /* ---------- Odabir veličine ---------- */
+  .sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .size-btn {
+    padding: 6px 12px;
+    border: 2px solid #3b4258;
+    border-radius: 999px;
+    background: transparent;
+    color: #aab3c8;
+    font-family: inherit;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .size-btn:hover { border-color: #4a9fe0; color: #e8ecf5; }
+  .size-btn.active {
+    background: #4a9fe0;
+    border-color: #4a9fe0;
+    color: #0d1119;
+  }
+
+  /* ---------- Odabir slike ---------- */
+  .picker {
+    display: flex;
+    gap: 6px;
+    padding: 4px 6px;
+    overflow-x: auto;
+    max-width: min(100vw - 20px, 640px);
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .picker::-webkit-scrollbar { display: none; }
+
+  .swatch {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: .85rem;
+    color: #10141f;
+    scroll-snap-align: start;
+    transition: border-color .15s ease, transform .1s ease;
+  }
+  .swatch:active { transform: scale(.9); }
+  .swatch.active { border-color: #4a9fe0; box-shadow: 0 0 0 2px #4a9fe0 inset; }
+  .swatch.numbers {
+    background: linear-gradient(160deg, #9ed8ff, #4a9fe0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---------- Prekidač brojeva ---------- */
+  .toggle-numbers {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 2px solid #3b4258;
+    border-radius: 999px;
+    background: transparent;
+    color: #aab3c8;
+    font-family: inherit;
+    font-size: .85rem;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s ease, color .15s ease, border-color .15s ease, opacity .15s ease;
+  }
+  .toggle-numbers:hover:not(:disabled) { border-color: #4a9fe0; color: #e8ecf5; }
+  .toggle-numbers.on {
+    background: #4a9fe0;
+    border-color: #4a9fe0;
+    color: #0d1119;
+  }
+  .toggle-numbers:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+  }
+  .toggle-numbers .eye {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  /* ---------- Ploča ---------- */
+  .board {
+    position: relative;
+    background: var(--board-bg);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+    overflow: hidden;
+    transition: box-shadow .3s ease;
+
+    width: min(
+      calc(100vw - 20px),
+      640px,
+      calc((100vh - var(--chrome)) * var(--cols) / var(--rows))
+    );
+    width: min(
+      calc(100vw - 20px),
+      640px,
+      calc((100dvh - var(--chrome)) * var(--cols) / var(--rows))
+    );
+    aspect-ratio: var(--cols) / var(--rows);
+  }
+
+  .board.solved {
+    box-shadow: 0 0 0 3px #7ef0a8, 0 12px 32px rgba(0, 0, 0, .45);
+  }
+
+  /* ---------- Rupa ---------- */
+  .hole {
+    position: absolute;
+    top: 0; left: 0;
+    width:  calc(100% / var(--cols));
+    height: calc(100% / var(--rows));
+    padding: calc(var(--gap) / 2);
+    box-sizing: border-box;
+    pointer-events: none;
+    transition: transform .18s cubic-bezier(.3, .9, .4, 1);
+    will-change: transform;
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-clip: content-box;
+  }
+  .hole::after {
+    content: '';
+    display: block;
+    width: 100%; height: 100%;
+    border-radius: var(--radius);
+    background: var(--hole);
+    box-shadow: inset 0 3px 8px rgba(0, 0, 0, .75);
+    transition: opacity .5s ease;
+  }
+  .board.solved.image-mode .hole::after { opacity: 0; }
+
+  /* ---------- Pločica ---------- */
+  .tile {
+    position: absolute;
+    top: 0; left: 0;
+    width:  calc(100% / var(--cols));
+    height: calc(100% / var(--rows));
+    padding: calc(var(--gap) / 2);
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: none;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    transition: transform .18s cubic-bezier(.3, .9, .4, 1);
+    will-change: transform;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tile.no-anim { transition: none; }
+
+  .tile .face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%; height: 100%;
+    border-radius: var(--radius);
+    font-weight: 700;
+    color: #10141f;
+    font-size: clamp(0.7rem, 4vmin, 1.6rem);
+    user-select: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .18);
+    overflow: hidden;
+    transition: filter .15s ease, transform .08s ease;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+
+  .board:not(.image-mode) .tile .face {
+    background: linear-gradient(160deg, #9ed8ff, #4a9fe0);
+  }
+
+  .tile:hover   .face { filter: brightness(1.1); }
+  .tile:active  .face { transform: scale(.94); }
+  .tile:focus-visible .face { outline: 3px solid #ffd76a; outline-offset: -3px; }
+
+  .board.dense .tile .face { font-size: clamp(0.6rem, 3.2vmin, 1.3rem); }
+
+  /* Broj unutar pločice */
+  .num {
+    font-size: inherit;
+    font-weight: 700;
+    line-height: 1;
+    color: #10141f;
+    transition: opacity .2s ease;
+    pointer-events: none;
+  }
+
+  /* U image mode: broj postaje mali badge u kutu */
+  .board.image-mode .tile .num {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    font-size: clamp(0.5rem, 2vmin, 0.78rem);
+    background: rgba(0, 0, 0, .72);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 6px;
+    line-height: 1.4;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+  }
+  .board.image-mode .tile .face { color: transparent; }
+
+  /* NOVO: skriveni brojevi u image modu */
+  .board.image-mode.hide-numbers .tile .num {
+    opacity: 0;
+  }
+
+  /* Bonus: brojevi se ipak kratko pokažu kad se ploča složi */
+  .board.image-mode.hide-numbers.solved .tile .num {
+    opacity: 0;
+  }
+
+  /* ---------- Info traka ---------- */
+  .info {
+    display: flex;
+    gap: 18px;
+    font-size: .9rem;
+    color: #aab3c8;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .info b { color: #e8ecf5; }
+  .info .best b { color: #ffd76a; }
+
+  /* ---------- Poruka ---------- */
+  .message {
+    min-height: 2.8em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: .95rem;
+    color: #7ef0a8;
+    text-align: center;
+    padding: 0 8px;
+    line-height: 1.3;
+  }
+
+  /* ---------- Gumb ---------- */
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 999px;
+    background: #4a9fe0;
+    color: #0d1119;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background .15s ease, transform .08s ease;
+  }
+  .btn:hover  { background: #6cb4ec; }
+  .btn:active { transform: scale(.96); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 480px) {
+    :root { --chrome: 345px; --gap: 4px; --radius: 8px; }
+    body  { padding: 8px; gap: 6px; }
+    h1    { font-size: 1.05rem; }
+    .size-btn { padding: 5px 10px; font-size: .78rem; }
+    .info { font-size: .8rem; gap: 12px; }
+    .btn  { padding: 9px 22px; font-size: .95rem; }
+    .swatch { width: 36px; height: 36px; }
+    .toggle-numbers { font-size: .78rem; padding: 5px 11px; }
+  }
+
+  @media (max-height: 620px) and (orientation: landscape) {
+    :root { --chrome: 220px; --gap: 4px; }
+    body  { padding: 6px; gap: 4px; }
+    h1    { display: none; }
+    .info { font-size: .78rem; gap: 10px; }
+    .message { min-height: 1.3em; font-size: .8rem; }
+    .btn  { padding: 6px 16px; font-size: .82rem; }
+    .size-btn { padding: 4px 9px; font-size: .72rem; }
+    .swatch { width: 30px; height: 30px; }
+    .picker { padding: 2px 4px; }
+    .toggle-numbers { font-size: .72rem; padding: 4px 10px; }
+  }
+
+  @media (max-width: 360px) {
+    :root { --chrome: 330px; }
+  }
+</style>
+</head>
+<body>
+
+  <h1>Klizna slagalica</h1>
+
+  <div class="sizes" id="sizes">
+    <button class="size-btn" data-cols="4" data-rows="4">4 × 4</button>
+    <button class="size-btn" data-cols="5" data-rows="5">5 × 5</button>
+    <button class="size-btn" data-cols="6" data-rows="4">4 × 6</button>
+    <button class="size-btn" data-cols="4" data-rows="6">6 × 4</button>
+  </div>
+
+  <div class="picker" id="picker"></div>
+
+  <button class="toggle-numbers on" id="toggleNumbers" type="button">
+    <span class="eye">👁</span>
+    <span class="label">Brojevi: uključeni</span>
+  </button>
+
+  <div class="info">
+    <span>Potezi: <b id="moves">0</b></span>
+    <span>Vrijeme: <b id="timer">00:00</b></span>
+    <span class="best">Najbolji: <b id="best">—</b></span>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <div class="message" id="message"></div>
+
+  <button class="btn" id="newGame">Nova igra</button>
+
+<script>
+/* =========================================================
+   10 SLIKA — generirane kao SVG (rade bez interneta)
+   ========================================================= */
+const IMAGES = [
+  { name: 'Zalazak sunca',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#ff6b6b'/>
+        <stop offset='0.5' stop-color='#ff9e4a'/>
+        <stop offset='1' stop-color='#ffd93d'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <circle cx='50' cy='65' r='20' fill='#fff8e1' opacity='0.35'/>
+      <circle cx='50' cy='65' r='13' fill='#fff8e1'/>
+      <circle cx='22' cy='22' r='4' fill='#fff' opacity='0.55'/>
+      <circle cx='78' cy='30' r='3' fill='#fff' opacity='0.5'/>
+    </svg>` },
+
+  { name: 'Ocean',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#4facfe'/>
+        <stop offset='1' stop-color='#003973'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <path d='M0 55 Q25 45 50 55 T100 55 L100 100 L0 100 Z' fill='#00d2ff' opacity='0.55'/>
+      <path d='M0 72 Q25 62 50 72 T100 72 L100 100 L0 100 Z' fill='#003973' opacity='0.85'/>
+    </svg>` },
+
+  { name: 'Šuma',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#a8e063'/>
+        <stop offset='1' stop-color='#56ab2f'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <polygon points='20,35 35,80 5,80' fill='#1d5c1d'/>
+      <polygon points='50,22 72,80 28,80' fill='#2a7a2a'/>
+      <polygon points='82,42 98,80 66,80' fill='#1d5c1d'/>
+      <rect x='0' y='80' width='100' height='20' fill='#4a3510'/>
+    </svg>` },
+
+  { name: 'Zvjezdana noć',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#141e30'/>
+        <stop offset='1' stop-color='#243b55'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <circle cx='20' cy='15' r='1.2' fill='#fff'/>
+      <circle cx='40' cy='25' r='0.9' fill='#fff'/>
+      <circle cx='70' cy='12' r='1' fill='#fff'/>
+      <circle cx='85' cy='30' r='0.9' fill='#fff'/>
+      <circle cx='60' cy='45' r='1.1' fill='#fff'/>
+      <circle cx='15' cy='55' r='0.7' fill='#fff'/>
+      <circle cx='90' cy='60' r='0.8' fill='#fff'/>
+      <circle cx='35' cy='72' r='1' fill='#fff'/>
+      <circle cx='75' cy='80' r='0.9' fill='#fff'/>
+      <circle cx='55' cy='15' r='0.6' fill='#fff'/>
+      <circle cx='10' cy='88' r='0.7' fill='#fff'/>
+      <circle cx='25' cy='40' r='3.5' fill='#ffeeba' opacity='0.9'/>
+    </svg>` },
+
+  { name: 'Duga',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <rect width='100' height='100' fill='#ff5252'/>
+      <rect y='14.28' width='100' height='14.28' fill='#ff9800'/>
+      <rect y='28.56' width='100' height='14.28' fill='#ffeb3b'/>
+      <rect y='42.84' width='100' height='14.28' fill='#4caf50'/>
+      <rect y='57.12' width='100' height='14.28' fill='#2196f3'/>
+      <rect y='71.40' width='100' height='14.28' fill='#3f51b5'/>
+      <rect y='85.68' width='100' height='14.32' fill='#9c27b0'/>
+    </svg>` },
+
+  { name: 'Geometrija',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <rect width='100' height='100' fill='#f4f1de'/>
+      <polygon points='0,0 50,0 0,50' fill='#e07a5f'/>
+      <polygon points='50,0 100,0 100,50' fill='#3d405b'/>
+      <polygon points='0,50 50,100 0,100' fill='#81b29a'/>
+      <polygon points='100,50 100,100 50,100' fill='#f2cc8f'/>
+      <polygon points='30,28 70,28 50,72' fill='#ffd166'/>
+      <circle cx='50' cy='50' r='9' fill='#ef476f'/>
+    </svg>` },
+
+  { name: 'Baloni',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#e0eafc'/>
+        <stop offset='1' stop-color='#cfdef3'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <circle cx='22' cy='30' r='12' fill='#ef476f' opacity='0.92'/>
+      <circle cx='52' cy='22' r='10' fill='#ffd166' opacity='0.92'/>
+      <circle cx='80' cy='36' r='11' fill='#06d6a0' opacity='0.92'/>
+      <circle cx='35' cy='62' r='9'  fill='#118ab2' opacity='0.92'/>
+      <circle cx='66' cy='70' r='13' fill='#ff9f1c' opacity='0.92'/>
+      <circle cx='18' cy='82' r='8'  fill='#8338ec' opacity='0.92'/>
+      <circle cx='88' cy='84' r='10' fill='#ff006e' opacity='0.92'/>
+    </svg>` },
+
+  { name: 'Planine',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#ffb88c'/>
+        <stop offset='1' stop-color='#de6262'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <polygon points='0,80 25,40 50,80' fill='#5c4742'/>
+      <polygon points='30,80 60,28 92,80' fill='#2b2b2b'/>
+      <polygon points='55,80 85,45 100,80' fill='#4a3b3b'/>
+      <polygon points='25,40 30,48 20,48' fill='#fff' opacity='0.95'/>
+      <polygon points='60,28 66,40 54,40' fill='#fff' opacity='0.95'/>
+      <rect y='80' width='100' height='20' fill='#3a2e2e'/>
+    </svg>` },
+
+  { name: 'Pustinja',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#ff9a44'/>
+        <stop offset='1' stop-color='#fc6076'/>
+      </linearGradient></defs>
+      <rect width='100' height='100' fill='url(#g)'/>
+      <circle cx='72' cy='28' r='13' fill='#fff3b0'/>
+      <path d='M0 70 Q30 60 60 75 T100 70 L100 100 L0 100 Z' fill='#d68c45'/>
+      <path d='M0 86 Q40 76 80 88 T100 86 L100 100 L0 100 Z' fill='#a9652f'/>
+    </svg>` },
+
+  { name: 'Apstraktno',
+    svg: `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'>
+      <rect width='100' height='100' fill='#f7f7f7'/>
+      <circle cx='30' cy='30' r='22' fill='#ef476f' opacity='0.78'/>
+      <circle cx='72' cy='40' r='20' fill='#06d6a0' opacity='0.78'/>
+      <circle cx='40' cy='75' r='25' fill='#118ab2' opacity='0.78'/>
+      <rect x='55' y='60' width='40' height='40' fill='#ffd166' opacity='0.85'/>
+      <polygon points='10,90 50,20 90,90' fill='#8338ec' opacity='0.4'/>
+    </svg>` }
+];
+
+function svgToDataUri(svg) {
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.trim());
+}
+
+/* =========================================================
+   KONFIGURACIJA
+   ========================================================= */
+let COLS = 4;
+let ROWS = 4;
+let SIZE = COLS * ROWS;
+let TILE_COUNT = SIZE - 1;
+
+/* =========================================================
+   STANJE
+   ========================================================= */
+let board   = [];
+let tileEls = {};
+let holeEl  = null;
+
+let moves  = 0;
+let solved = false;
+let startTime = null;
+let timerId   = null;
+
+let currentImageIndex = -1;   // -1 = brojevi, 0..9 = slike
+let showNumbers = true;       // NOVO: prikaz brojeva u image modu
+
+/* DOM */
+const boardEl    = document.getElementById('board');
+const movesEl    = document.getElementById('moves');
+const timerEl    = document.getElementById('timer');
+const bestEl     = document.getElementById('best');
+const messageEl  = document.getElementById('message');
+const newGameBtn = document.getElementById('newGame');
+const sizesEl    = document.getElementById('sizes');
+const pickerEl   = document.getElementById('picker');
+const toggleNumbersBtn = document.getElementById('toggleNumbers');
+const toggleLabel = toggleNumbersBtn.querySelector('.label');
+const toggleEye   = toggleNumbersBtn.querySelector('.eye');
+
+/* =========================================================
+   POMOĆNE
+   ========================================================= */
+function solvedState() {
+  const s = [];
+  for (let i = 1; i <= TILE_COUNT; i++) s.push(i);
+  s.push(0);
+  return s;
+}
+
+function isSolved() {
+  for (let i = 0; i < TILE_COUNT; i++) if (board[i] !== i + 1) return false;
+  return board[TILE_COUNT] === 0;
+}
+
+function neighbors(index) {
+  const r = Math.floor(index / COLS);
+  const c = index % COLS;
+  const out = [];
+  if (r > 0)        out.push(index - COLS);
+  if (r < ROWS - 1) out.push(index + COLS);
+  if (c > 0)        out.push(index - 1);
+  if (c < COLS - 1) out.push(index + 1);
+  return out;
+}
+
+function setPos(el, cellIdx) {
+  const r = Math.floor(cellIdx / COLS);
+  const c = cellIdx % COLS;
+  el.style.transform = `translate(${c * 100}%, ${r * 100}%)`;
+}
+
+/* =========================================================
+   PRIMJENA SLIKE NA PLOČU
+   ========================================================= */
+function applyImageToBoard() {
+  const isImage = currentImageIndex >= 0;
+  boardEl.classList.toggle('image-mode', isImage);
+
+  if (!isImage) {
+    for (let v = 1; v <= TILE_COUNT; v++) {
+      const face = tileEls[v].querySelector('.face');
+      face.style.backgroundImage = '';
+      face.style.backgroundSize = '';
+      face.style.backgroundPosition = '';
+    }
+    holeEl.style.backgroundImage = '';
+    holeEl.style.backgroundSize = '';
+    holeEl.style.backgroundPosition = '';
+    updateNumbersToggleState();
+    return;
+  }
+
+  const uri = svgToDataUri(IMAGES[currentImageIndex].svg);
+  const bgSize = `${COLS * 100}% ${ROWS * 100}%`;
+
+  for (let v = 1; v <= TILE_COUNT; v++) {
+    const home = v - 1;
+    const r = Math.floor(home / COLS);
+    const c = home % COLS;
+    const px = COLS > 1 ? (c / (COLS - 1)) * 100 : 0;
+    const py = ROWS > 1 ? (r / (ROWS - 1)) * 100 : 0;
+
+    const face = tileEls[v].querySelector('.face');
+    face.style.backgroundImage = `url("${uri}")`;
+    face.style.backgroundSize = bgSize;
+    face.style.backgroundPosition = `${px}% ${py}%`;
+  }
+
+  const hr = Math.floor(TILE_COUNT / COLS);
+  const hc = TILE_COUNT % COLS;
+  const hpx = COLS > 1 ? (hc / (COLS - 1)) * 100 : 0;
+  const hpy = ROWS > 1 ? (hr / (ROWS - 1)) * 100 : 0;
+
+  holeEl.style.backgroundImage = `url("${uri}")`;
+  holeEl.style.backgroundSize = bgSize;
+  holeEl.style.backgroundPosition = `${hpx}% ${hpy}%`;
+
+  updateNumbersToggleState();
+}
+
+/* =========================================================
+   NOVO: Prekidač brojeva
+   ========================================================= */
+function applyNumbersVisibility() {
+  boardEl.classList.toggle('hide-numbers', !showNumbers);
+}
+
+function updateNumbersToggleState() {
+  // Ako smo u modu "Brojevi", prekidač nema smisla → onemogući ga
+  const isImage = currentImageIndex >= 0;
+  toggleNumbersBtn.disabled = !isImage;
+
+  toggleNumbersBtn.classList.toggle('on', showNumbers && isImage);
+  toggleEye.textContent = showNumbers ? '👁' : '🚫';
+
+  if (!isImage) {
+    toggleLabel.textContent = 'Brojevi: obavezni';
+  } else {
+    toggleLabel.textContent = showNumbers
+      ? 'Brojevi: uključeni'
+      : 'Brojevi: isključeni';
+  }
+
+  applyNumbersVisibility();
+}
+
+function toggleNumbers() {
+  showNumbers = !showNumbers;
+  updateNumbersToggleState();
+  try { localStorage.setItem('puzzle-show-numbers', showNumbers ? '1' : '0'); } catch (e) {}
+}
+
+/* =========================================================
+   PRIMJENA VELIČINE PLOČE
+   ========================================================= */
+function applySize(cols, rows) {
+  COLS = cols;
+  ROWS = rows;
+  SIZE = COLS * ROWS;
+  TILE_COUNT = SIZE - 1;
+
+  document.documentElement.style.setProperty('--cols', COLS);
+  document.documentElement.style.setProperty('--rows', ROWS);
+
+  boardEl.classList.toggle('dense', COLS >= 5 && ROWS >= 5);
+  updateBestDisplay();
+}
+
+/* =========================================================
+   MIJEŠANJE
+   ========================================================= */
+function shuffle() {
+  const steps = SIZE * 300;
+  do {
+    board = solvedState();
+    let empty = SIZE - 1;
+    let prev  = -1;
+
+    for (let i = 0; i < steps; i++) {
+      const opts = neighbors(empty).filter(n => n !== prev);
+      const pick = opts[Math.floor(Math.random() * opts.length)];
+      board[empty] = board[pick];
+      board[pick]  = 0;
+      prev  = empty;
+      empty = pick;
+    }
+  } while (isSolved());
+}
+
+/* =========================================================
+   IZGRADNJA DOM-a
+   ========================================================= */
+function buildBoard() {
+  boardEl.innerHTML = '';
+  tileEls = {};
+
+  holeEl = document.createElement('div');
+  holeEl.className = 'hole';
+  boardEl.appendChild(holeEl);
+
+  for (let v = 1; v <= TILE_COUNT; v++) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'tile no-anim';
+    tile.setAttribute('aria-label', 'Pločica ' + v);
+
+    const face = document.createElement('span');
+    face.className = 'face';
+
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = v;
+    face.appendChild(num);
+
+    tile.appendChild(face);
+    tile.addEventListener('click', () => tryMove(v));
+
+    boardEl.appendChild(tile);
+    tileEls[v] = tile;
+  }
+
+  for (let cellIdx = 0; cellIdx < SIZE; cellIdx++) {
+    const v = board[cellIdx];
+    if (v === 0) setPos(holeEl, cellIdx);
+    else         setPos(tileEls[v], cellIdx);
+  }
+
+  applyImageToBoard();
+  applyNumbersVisibility();
+
+  void boardEl.offsetWidth;
+  Object.values(tileEls).forEach(t => t.classList.remove('no-anim'));
+}
+
+/* =========================================================
+   POTEZ
+   ========================================================= */
+function tryMove(value) {
+  if (solved) return;
+
+  const cellIdx  = board.indexOf(value);
+  const emptyIdx = board.indexOf(0);
+  if (!neighbors(emptyIdx).includes(cellIdx)) return;
+
+  board[emptyIdx] = value;
+  board[cellIdx]  = 0;
+
+  setPos(tileEls[value], emptyIdx);
+  setPos(holeEl, cellIdx);
+
+  moves++;
+  movesEl.textContent = moves;
+
+  if (navigator.vibrate) navigator.vibrate(8);
+
+  checkWin();
+}
+
+/* =========================================================
+   POBJEDA
+   ========================================================= */
+function checkWin() {
+  if (!isSolved()) return;
+
+  solved = true;
+  stopTimer();
+  boardEl.classList.add('solved');
+
+  if (navigator.vibrate) navigator.vibrate([40, 60, 120]);
+
+  const key = 'puzzle-best-' + COLS + 'x' + ROWS;
+  let newRecord = false;
+
+  try {
+    const stored = parseInt(localStorage.getItem(key), 10);
+    if (!stored || moves < stored) {
+      localStorage.setItem(key, moves);
+      newRecord = true;
+    }
+  } catch (e) {}
+
+  updateBestDisplay();
+
+  let extra = '';
+  if (currentImageIndex >= 0 && !showNumbers) {
+    extra = ' Slika je složena bez pomoći brojeva — svaka čast!';
+  }
+
+  messageEl.textContent =
+    (newRecord ? '🏆 Novi rekord! ' : '🎉 Čestitam! ') +
+    'Slagalica je složena — ' + moves + ' poteza, ' + timerEl.textContent + '.' +
+    extra;
+}
+
+/* =========================================================
+   NAJBOLJI REZULTAT
+   ========================================================= */
+function updateBestDisplay() {
+  const key = 'puzzle-best-' + COLS + 'x' + ROWS;
+  let val = null;
+  try {
+    const s = localStorage.getItem(key);
+    if (s !== null) val = parseInt(s, 10);
+  } catch (e) {}
+  bestEl.textContent = val ? (val + ' poteza') : '—';
+}
+
+/* =========================================================
+   TIMER
+   ========================================================= */
+function startTimer() {
+  stopTimer();
+  startTime = Date.now();
+  timerEl.textContent = '00:00';
+  timerId = setInterval(() => {
+    const total = Math.floor((Date.now() - startTime) / 1000);
+    const m = String(Math.floor(total / 60)).padStart(2, '0');
+    const s = String(total % 60).padStart(2, '0');
+    timerEl.textContent = m + ':' + s;
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerId !== null) { clearInterval(timerId); timerId = null; }
+}
+
+/* =========================================================
+   NOVA IGRA
+   ========================================================= */
+function newGame() {
+  solved = false;
+  moves  = 0;
+  movesEl.textContent = '0';
+  messageEl.textContent = '';
+  boardEl.classList.remove('solved');
+
+  shuffle();
+  buildBoard();
+  startTimer();
+}
+
+/* =========================================================
+   IZGRADNJA PICKER-a
+   ========================================================= */
+function buildPicker() {
+  const numBtn = document.createElement('button');
+  numBtn.className = 'swatch numbers active';
+  numBtn.dataset.img = '-1';
+  numBtn.title = 'Brojevi';
+  numBtn.textContent = '123';
+  pickerEl.appendChild(numBtn);
+
+  IMAGES.forEach((img, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'swatch';
+    btn.dataset.img = String(i);
+    btn.title = img.name;
+    btn.style.backgroundImage = `url("${svgToDataUri(img.svg)}")`;
+    pickerEl.appendChild(btn);
+  });
+}
+
+pickerEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.swatch');
+  if (!btn) return;
+
+  pickerEl.querySelectorAll('.swatch').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  currentImageIndex = parseInt(btn.dataset.img, 10);
+  applyImageToBoard();
+  updateNumbersToggleState();
+});
+
+/* =========================================================
+   ODABIR VELIČINE
+   ========================================================= */
+sizesEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.size-btn');
+  if (!btn) return;
+
+  sizesEl.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  applySize(+btn.dataset.cols, +btn.dataset.rows);
+  newGame();
+});
+
+/* =========================================================
+   PREKIDAČ BROJEVA
+   ========================================================= */
+toggleNumbersBtn.addEventListener('click', toggleNumbers);
+
+/* =========================================================
+   TIPKOVNICA
+   ========================================================= */
+document.addEventListener('keydown', (e) => {
+  // Tipka "N" — prebaci brojeve (samo u image modu)
+  if ((e.key === 'n' || e.key === 'N') && currentImageIndex >= 0) {
+    toggleNumbers();
+    return;
+  }
+
+  if (solved) return;
+  const empty = board.indexOf(0);
+  const r = Math.floor(empty / COLS);
+  const c = empty % COLS;
+  let target = -1;
+
+  if (e.key === 'ArrowUp'    && r < ROWS - 1) target = empty + COLS;
+  if (e.key === 'ArrowDown'  && r > 0)        target = empty - COLS;
+  if (e.key === 'ArrowLeft'  && c < COLS - 1) target = empty + 1;
+  if (e.key === 'ArrowRight' && c > 0)        target = empty - 1;
+
+  if (target >= 0) {
+    e.preventDefault();
+    tryMove(board[target]);
+  }
+});
+
+newGameBtn.addEventListener('click', newGame);
+
+/* =========================================================
+   INICIJALIZACIJA
+   ========================================================= */
+(function init() {
+  // Učitaj preferenciju prikaza brojeva
+  try {
+    const s = localStorage.getItem('puzzle-show-numbers');
+    if (s === '0') showNumbers = false;
+  } catch (e) {}
+
+  buildPicker();
+
+  const first = sizesEl.querySelector('.size-btn');
+  first.classList.add('active');
+  applySize(+first.dataset.cols, +first.dataset.rows);
+  newGame();
+})();
+</script>
+</body>
+</html>
