@@ -2,6 +2,10 @@
 <html lang="hr">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1e2230">
 <title>Klizna slagalica</title>
@@ -969,6 +973,15 @@ newGameBtn.addEventListener('click', newGame);
   applySize(+first.dataset.cols, +first.dataset.rows);
   newGame();
 })();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registriran', reg))
+      .catch(err => console.log('SW greška', err));
+  });
+}
 </script>
 </body>
 </html>
